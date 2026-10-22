@@ -51,6 +51,8 @@ public class TurtleHWriter extends AbstractRDFWriter {
 
     private static final Pattern PREFIX_NAME = Pattern.compile("[A-Za-z][A-Za-z0-9_-]*|");
     private static final Pattern LOCAL_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_-]*");
+    /** Turtle LANGTAG; a tag outside it cannot be written without changing the document's syntax. */
+    private static final Pattern LANGTAG = Pattern.compile("[A-Za-z]+(-[A-Za-z0-9]+)*");
     private static final ValueFactory VF = SimpleValueFactory.getInstance();
 
     private final Writer out;
@@ -321,7 +323,13 @@ public class TurtleHWriter extends AbstractRDFWriter {
         escapeString(lit.getLabel(), sb);
         sb.append('"');
         if (lit.getLanguage().isPresent()) {
-            sb.append('@').append(lit.getLanguage().get());
+            String tag = lit.getLanguage().get();
+            if (!LANGTAG.matcher(tag).matches()) {
+                // A Literal from another model implementation may carry any string; writing it verbatim
+                // would let a tag such as en" . <s> <p> <o> . " inject statements into the output.
+                throw new TurtleHSerializationException("Language tag is not a Turtle LANGTAG: " + tag);
+            }
+            sb.append('@').append(tag);
             Literal.BaseDirection dir = lit.getBaseDirection();
             if (dir == Literal.BaseDirection.LTR) {
                 sb.append("--ltr");

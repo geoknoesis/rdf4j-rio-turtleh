@@ -2,6 +2,7 @@ package com.geoknoesis.rdf4j.rio.turtleh;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
@@ -130,6 +131,26 @@ public class TurtleHWriterTest {
         TurtleHDocument reparsed = TurtleHDocument.parse(out.toString(), "");
         assertFalse(out.toString(), reparsed.getMetadata().contains(ex("H"), RDFH.PARENT_HOLON, ex("Other")));
         assertTrue(reparsed.getMetadata().contains(ex("H"), RDF.TYPE, RDFH.HOLON));
+    }
+
+    @Test
+    public void rejectsLanguageTagsThatWouldInjectStatements() throws IOException {
+        String injected = "en\" . <urn:evil> <urn:p> <urn:o> . \"";
+        org.eclipse.rdf4j.model.Literal lit;
+        try {
+            lit = VF.createLiteral("x", injected);
+        } catch (IllegalArgumentException alreadyRejected) {
+            return; // the value factory refused the tag, so it can never reach the writer
+        }
+        Model g = new LinkedHashModel();
+        g.add(ex("H"), RDF.TYPE, RDFH.HOLON);
+        g.add(ex("s"), ex("p"), lit);
+        StringWriter out = new StringWriter();
+        TurtleHWriter writer = new TurtleHWriter(out);
+        writer.startRDF();
+        g.forEach(writer::handleStatement);
+        assertThrows(TurtleHSerializationException.class, writer::endRDF);
+        assertFalse(out.toString(), out.toString().contains("urn:evil"));
     }
 
     /**
